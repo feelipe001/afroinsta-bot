@@ -1,69 +1,73 @@
-
+import os
 import logging
 import requests
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 
-# Token do bot
-TOKEN = "7750861867:AAEyy1h8XbASJGhpvRembHjsiEnJ3oaA65k"
+BOT_TOKEN = os.getenv("BOT_TOKEN")
 
-# Ativar logs
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
 
-# Mensagens e botões
-mensagem_video = "🎬 *Afroinsta Downloader*\n\n✅ Vídeo baixado com sucesso!"
-mensagem_pergunta = "🍿 Curte filmes?"
-
-botoes_filmes = InlineKeyboardMarkup([
-    [InlineKeyboardButton("📱 Baixar para Android", url="https://links.unitvnet.app/IAFLDMW")],
-    [InlineKeyboardButton("🍎 iPhone ou SmartTV", url="https://wa.me/message/3IY74MCWLWN2B1")]
-])
-
-# Função principal do bot
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text.strip()
-    
-    if "instagram.com" in text:
-        try:
-            api_url = f"https://igram.world/api/instagram?url={text}"
-            r = requests.get(api_url, headers={"User-Agent": "Mozilla/5.0"})
-            data = r.json()
-
-            if data and "url" in data and len(data["url"]) > 0:
-                video_url = data["url"][0]
-
-                await update.message.reply_video(
-                    video=video_url,
-                    caption=mensagem_video,
-                    parse_mode="Markdown"
-                )
-
-                await update.message.reply_text(
-                    mensagem_pergunta,
-                    reply_markup=botoes_filmes
-                )
-            else:
-                await update.message.reply_text("⚠️ Não consegui extrair o vídeo. Tente outro link.")
-        except Exception as e:
-            await update.message.reply_text("❌ Erro ao processar o vídeo. Tente novamente mais tarde.")
-            logging.error(f"Erro: {e}")
-    else:
-        await update.message.reply_text("Por favor, envie um link válido do Instagram.")
-
-# Mensagem de boas-vindas
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_markdown(
-        "👋 *Seja bem-vindo ao Afroinsta Downloader!*\n\n"
-        "Me mande um link de Reels ou vídeo do Instagram que eu te envio o conteúdo direto aqui no Telegram.\n\n"
-        "🎥 Simples, rápido e sem redirecionamento.\n\n"
-        "👇 Experimente agora enviando um link do Instagram!"
-    )
+    await update.message.reply_text("Envie um link de vídeo do Instagram e eu trago o download!")
 
-# Inicializador do bot
+def baixar_video_instagram(insta_url):
+    try:
+        snapinsta_url = "https://snapinsta.io/api/ajaxSearch"
+        headers = {
+            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+            "Origin": "https://snapinsta.io",
+            "Referer": "https://snapinsta.io/",
+            "User-Agent": "Mozilla/5.0"
+        }
+        data = {
+            "q": insta_url,
+            "t": "media",
+            "lang": "en"
+        }
+        response = requests.post(snapinsta_url, headers=headers, data=data)
+        if '"url":"' in response.text:
+            video_link = response.text.split('"url":"')[1].split('"')[0].replace('\\', '')
+            return video_link
+        return None
+    except Exception as e:
+        logging.error(f"Erro ao baixar: {e}")
+        return None
+
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    insta_url = update.message.text.strip()
+    if "instagram.com" not in insta_url:
+        await update.message.reply_text("Me manda um link válido do Instagram.")
+        return
+
+    await update.message.reply_text("Baixando o vídeo, segura aí...")
+
+    video_url = baixar_video_instagram(insta_url)
+
+    if video_url:
+        await context.bot.send_video(chat_id=update.effective_chat.id, video=video_url)
+
+        keyboard = [
+            [InlineKeyboardButton("Android (Baixar App)", url="https://links.unitvnet.app/IAFLDMW")],
+            [InlineKeyboardButton("iPhone / Smart TV", url="https://wa.me/message/3IY74MCWLWN2B1")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text="🎬 Curte filmes? A gente tem o app perfeito pra você!",
+            reply_markup=reply_markup
+        )
+    else:
+        await update.message.reply_text("Não consegui baixar esse vídeo. Tenta outro link ou aguarda um pouco.")
+
 def main():
-    app = ApplicationBuilder().token(TOKEN).build()
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app.run_polling()
 
 if __name__ == "__main__":
