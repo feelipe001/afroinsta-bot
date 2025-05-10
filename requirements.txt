@@ -1,4 +1,3 @@
 fastapi
 uvicorn[standard]
 yt-dlp
-python-telegram-bot  # se você tiver código do bot junto aqui
